@@ -1,182 +1,153 @@
 package com.mgummelt.economics
 
-/** Set of inputs */
+import Utils._
+
+/** Suite. */
 abstract class Suite extends Map[Product, Double] {
+  /** Price. */
   def price: Double = {
-    map { case (product, quantity) => product.price * quantity}.sum
+    map {
+      case (product, quantity) =>
+        product.price * quantity
+    }.sum
   }
 }
 
-/** FoL Statement */
+/** FoL Statement. */
 abstract class Statement
 
-/** Product */
-abstract class Product {
-  val outputs: Set[Product] = {
-    // p | p.inputs.contains(this)
-    _
+/** Double or Enumeration. */
+abstract class Feature
+
+/** Types of product processes. */
+object Process extends Enumeration {
+  val DESIGN, MANUFACTURE, PRODUCT_IMPLEMENTATION = Value
+}
+
+/** Product.
+  *
+  * @param interface All true statements about the Product's behavior.
+  * @param quantity Quantity currently in existence.
+  */
+class Product(
+    val interface: Set[Statement],
+    val quantity: Double) {
+
+  /** Copy constructor. */
+  def this(other: Product) {
+    this(other.interface, other.quantity)
   }
 
-  /** Price of this product. */
-  def price: Double = {
-    if (competitive) {
-      p | demand(p) == supply(p)
-    } else {
-      demand^{-1}(quantity) | marginalCost(q) == marginalRevenue(q)
-    }
-  }
-
-  /** Quantity of units produced. */
-  def quantity: Double = {
-    demand(price)
-  }
-
-  /** True if this product is profitable */
+  /** True if this product is profitable. */
   def profitable: Boolean = {
-    // True if, for some quantity, the demand is greater than the supply
+    profit > 0
+  }
+
+  /** Total profit */
+  def profit: Double = {
+    revenue - cost
+  }
+
+  /** Change in total revenue from one additional unit. */
+  def marginalRevenue(quantity: Double): Double = {
+    // d(revenue)/d(quantity)
     _
   }
 
-  /** True if buyers and sellers are so numerous that no single buyer or seller can affect the price */
-  def competitive: Boolean
+  /** Total revenue. */
+  def revenue: Double = {
+    price * quantity
+  }
 
-  /** Set of all outputs this product can produce */
-  def outputs: Set[Product] = _
-
-  /** Quantity suppliers will produce if the Product is priced at a given price.
-    *
-    * NOTE: This function computes the long-run supply curve.  It doesn't take production ramp-up time into account.
-    * In reality, the quantity suppliers will produce at any given time depends on the stage of production.
-    * For example, a new product may be very cheap to produce, but it will have a small supply (i.e. quantity) if
-    * there isn't yet a factory for it.
-    *
-    * dependency chain:
-    *   price
-    *     firm.averageCost
-    *       inputs.price
-    *         inputs.demand
-    *           quantity
-    *
-    * @param price price of this Product
-    */
-  def supply(price: Double): Double = {
-    if (competitive) {
-      competitiveSupply(price);
+  /** Price. */
+  def price: Double = {
+    if (quantity > 0) {
+      inv(demand)(quantity)
     } else {
-      _ // competitive firms have no supply curve
+      Double.PositiveInfinity
     }
   }
 
-  /** Quantity suppliers will produce in a competitive market if the Product is priced at a given price. */    */
-  private def competitiveSupply(price: Double): Double = {
-    val copy = new Product {
-      override def price = price
-      override def quantity = q
-    }
-
-    val firm = new Firm {
-      override val product: Product = copy
-    }
-
-    // In a competitive market, firms will enter and exit the market until there is zero profit, meaning
-    // {{firm.averageCost == price}}.  Thus supply is the quantity at which this equation holds true.
-    q | (firm.averageCost == price)
-  }
-
-  /** The cost to design an implementation of this product's interface.
-    *
-    * Related to the cost of computing {{producible(quantity, suite)}}.  This reduces down to the human creative process,
-    * which is outside the scope of this model.
-    */
-  def designCost(quantity: Double, suite: Suite): Double = _
-
-
-  /** Quantity the market will purchase at a given price.
-    *
-    * dependency chain:
-    *   quantity
-    *     output.quantity
-    *       output.demand
-    *       output.price
-    *         output.firm.averageCost
-    *           complements.price
-    *             price
-    *
-    *   @param price price of this Product
-    */
+  /** Quantity the market will purchase at a given price. */
   def demand(price: Double): Double = {
-    // Create a copy of this product, with {{copy.price}} set to {{price}}.  Over all of its outputs, sum the quantity
-    // that would be used of this copy to create the output.
-    val copy: Product = _
+    // Copy of this product, with [[copy.price]] set to [[price]].
+    val copy: Product = new Product(this) {
+      override def price: Double = price
+    }
 
-    copy.outputs.map { output =>
-      // output.quantity must also be computed w/ copy
-      val suite = inputs^{-1}(output.quantity)
-      suite[copy]
-    }.sum
+    // Sum the quantity of [[copy]] that would be used to create each output.
+    copy.outputs.map { _.inputs.get(copy) }.sum
   }
 
-  // The cheapest suite that produces {{quantity}} units of {{this}}
-  def inputs(quantity: Double): Option[Suite] = {
+  /** Total average cost. */
+  def averageCost: Double = {
+    cost / quantity
+  }
+
+  /** Average cost of producing the given quantity. */
+  def averageCost(quantity: Double): Double = {
+    cost(quantity) / quantity
+  }
+
+  /** Total cost. */
+  def cost: Double = {
+    cost(quantity)
+  }
+
+  /** Cost of producing one more unit. */
+  def marginalCost(quantity: Double): Double = {
+    // d(cost)/d(quantity)
+    _
+  }
+
+  /** Total cost of producing the given quantity.
+    *
+    * Economies of scale: decreases initially. fixed costs are amortized, purchasing power
+    *     increases, workers specialize, etc.
+    * Diseconomies of scale: increases eventually. inputs become scarce, production becomes less
+    *     efficient.
+    */
+  def cost(quantity: Double): Double = {
+    inputs(quantity)
+      .map(_.price)
+      .getOrElse(Double.PositiveInfinity)
+  }
+
+  /** Quantity the firm will produce. */
+  private def quantityInDemand: Double = {
+    first(quantity => marginalCost(quantity) == marginalRevenue(quantity))
+  }
+
+  /** Simplification of [[interface]]. */
+  private def features: List[Feature] = _
+
+  /** Outputs which use this product. */
+  private def outputs: Set[Product] = {
+    all(product => product.inputs.get.contains(this))
+  }
+
+  /** The cheapest suite that produces this product at the current [[quantity]]. */
+  private def inputs: Option[Suite] = {
+    inputs(quantity)
+  }
+
+  /** The cheapest suite that produces [[quantity]] units.. */
+  private def inputs(quantity: Double): Option[Suite] = {
     val suite = possibleInputs(quantity).minBy(_.price)
     Option(suite)
   }
 
-  // The set of suites that are able to produce {{quantity}} units of {{this}}
-  def possibleInputs(quantity: Double): Set[Suite] = {
-    // depends on {{production}}
-    _
+  /** The set of suites able to produce {{quantity}} units. */
+  private def possibleInputs(quantity: Double): Set[Suite] = {
+    all(suite => producible(quantity, suite))
   }
 
-  /** Derivative of [[production]].
+  /** True if {{inputs}} can produce {{quantity}} units.
     *
-    * @param input
-    * @return
-    */
-  def marginalProduct(input: Any): Double
-
-  /** Quantity of {{this}} produced by {{suite}} */
-  def production(suite: Suite): Double = {
-    // depends on {{producible}}
-    _
-  }
-
-  /** True if {{suite}} can produce {{quantity}} of {{this}}.
+    * One fixed cost of any product is design, which means {{inputs}} must include the design labor costs.
     *
-    * Since the design of any product is a cost in itself, {{suite}} must include some "inventor", who must spend time
-    * (and therefore money) going through a similar process as {{producible}} itself.  Thus this method is informally
-    * self-referential.
+    * @param quantity Quantity of this product for {{inputs}} to produce.
+    * @param inputs Suite to produce this product.
     */
-  def producible(quantity: Double, suite: Suite): Boolean = {
-    /**
-      * This predicate asks "Does there exist a path from the initial state (where {{suite}} exists) to a goal
-      * state (where this product exists)".
-      *
-      * Hardware and software modeling are different.  I'm still not sure how to deal with both in a standard way.
-      * One way to model hardware is as a set of affordances.  These are methods that run when some condition is true.
-      * It could be implemented by the observer pattern.  But for now I'm going to assume software.
-      *      *
-      * class Object {
-      *   // Enables us to distinguish between e.g. cotton with seeds stuck to it vs. cotton w/o seeds stuck to it.
-      *   def isProduct(): Boolean
-      *
-      *   @affordance
-      *   def pickup()
-      *
-      *   @affordance
-      *   def putdown()
-      *   ...
-      * }
-      *
-      * To determine if a set of inputs can produce an output, we start the computation, and return true if we end in a
-      * goal state.  A goal state is defined by a state with {{quantity}} of this product, where isProduct() is true.
-      **/
-    _
-  }
-
-  /** True statements on the behavior of this {{Product}} */
-  def interface(): Set[Statement] = {
-    _
-  }
+  private def producible(quantity: Double, inputs: Suite): Double = _
 }
-
