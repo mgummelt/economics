@@ -151,3 +151,7 @@ class Product(
     */
   private def producible(quantity: Double, inputs: Suite): Double = _
 }
+
+object Product {
+  val all: Set[Product] = _
+}
