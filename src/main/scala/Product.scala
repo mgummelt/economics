@@ -87,7 +87,7 @@ class Product(
     * Diseconomies of scale: increases eventually. inputs become scarce, production becomes less
     *     efficient.
     */
-  def cost(quantity: Double): RV[Double] = {
+  def cost(quantity: Double): Double = {
     inputs(quantity)
       .map(_.price)
       .getOrElse(Double.PositiveInfinity)
@@ -103,25 +103,23 @@ class Product(
 
   /** Outputs which use this product. */
   private def outputs: Set[Product] = {
-    all(product => product.inputs.get.contains(this))
+    Product.all.filter(_.inputs.get.contains(this))
   }
 
-  /** The cheapest suite that produces this product at the current [[quantity]]. */
-  private def inputs: RV[Suite] = {
+  /** The inputs chosen to produce this product. */
+  private def inputs: Option[Suite] = {
     inputs(quantity)
   }
 
   /** The cheapest suite that produces [[quantity]] units.. */
-  private def inputs(quantity: Double): RV[Suite] = {
+  private def inputs(quantity: Double): Option[Suite] = {
     val inputs = possibleInputs(quantity).minBy(_.price)
     Option(inputs)
   }
 
   /** The set of inputs able to produce {{quantity}} units. */
-  private def possibleInputs(quantity: Double): Map[Suite, Probability] = {
-    Suite.all.map { suite =>
-      suite -> producible(quantity, suite)
-    }.toMap
+  private def possibleInputs(quantity: Double): Set[Suite] = {
+    Suite.all.filter { producible(quantity, _) }
   }
 
   /** True if {{inputs}} can produce {{quantity}} units.
