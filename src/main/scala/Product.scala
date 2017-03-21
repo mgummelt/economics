@@ -2,27 +2,7 @@ package com.mgummelt.economics
 
 import Utils._
 
-/** Suite. */
-abstract class Suite extends Map[Product, Double] {
-  /** Price. */
-  def price: Double = {
-    map {
-      case (product, quantity) =>
-        product.price * quantity
-    }.sum
-  }
-}
-
-/** FoL Statement. */
-abstract class Statement
-
-/** Double or Enumeration. */
-abstract class Feature
-
-/** Types of product processes. */
-object Process extends Enumeration {
-  val DESIGN, MANUFACTURE, PRODUCT_IMPLEMENTATION = Value
-}
+import scala.collection.concurrent.RDCSS_Descriptor
 
 /** Product.
   *
@@ -107,7 +87,7 @@ class Product(
     * Diseconomies of scale: increases eventually. inputs become scarce, production becomes less
     *     efficient.
     */
-  def cost(quantity: Double): Double = {
+  def cost(quantity: Double): RV[Double] = {
     inputs(quantity)
       .map(_.price)
       .getOrElse(Double.PositiveInfinity)
@@ -127,31 +107,46 @@ class Product(
   }
 
   /** The cheapest suite that produces this product at the current [[quantity]]. */
-  private def inputs: Option[Suite] = {
+  private def inputs: RV[Suite] = {
     inputs(quantity)
   }
 
   /** The cheapest suite that produces [[quantity]] units.. */
-  private def inputs(quantity: Double): Option[Suite] = {
-    val suite = possibleInputs(quantity).minBy(_.price)
-    Option(suite)
+  private def inputs(quantity: Double): RV[Suite] = {
+    val inputs = possibleInputs(quantity).minBy(_.price)
+    Option(inputs)
   }
 
-  /** The set of suites able to produce {{quantity}} units. */
-  private def possibleInputs(quantity: Double): Set[Suite] = {
-    all(suite => producible(quantity, suite))
+  /** The set of inputs able to produce {{quantity}} units. */
+  private def possibleInputs(quantity: Double): Map[Suite, Probability] = {
+    Suite.all.map { suite =>
+      suite -> producible(quantity, suite)
+    }.toMap
   }
 
   /** True if {{inputs}} can produce {{quantity}} units.
     *
-    * One fixed cost of any product is design, which means {{inputs}} must include the design labor costs.
+    * The cost of producing {{quantity}} units of this product is twofold:
+    * 1) The cost of designing this product.  This means that {{inputs}} must include the labor costs of design.
+    * 2) The cost of manufacturing {{quantity}} units.
     *
     * @param quantity Quantity of this product for {{inputs}} to produce.
     * @param inputs Suite to produce this product.
     */
-  private def producible(quantity: Double, inputs: Suite): Double = _
+  private def producible(quantity: Double, inputs: Suite): Probability = _
 }
 
 object Product {
   val all: Set[Product] = _
+}
+
+/** FoL Statement. */
+abstract class Statement
+
+/** Double or Enumeration. */
+abstract class Feature
+
+/** Types of product processes. */
+object Process extends Enumeration {
+  val DESIGN, MANUFACTURE, PRODUCT_IMPLEMENTATION = Value
 }

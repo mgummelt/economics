@@ -13,3 +13,6 @@ object Utils {
 
 /** Random Variable */
 class RV[A]
+
+/** 0 <= probability <= 1 */
+abstract class Probability extends Double
